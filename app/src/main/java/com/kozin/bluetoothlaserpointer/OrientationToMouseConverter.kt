@@ -1,4 +1,4 @@
-package com.example.audiorecord
+package com.kozin.bluetoothlaserpointer
 
 import kotlin.math.abs
 
@@ -17,6 +17,11 @@ class OrientationToMouseConverter(
         initialPitch = null
         smoothedDx = 0f
         smoothedDy = 0f
+    }
+
+    fun recenter() {
+        initialAzimuth = null
+        initialPitch = null
     }
 
     fun convert(azimuth: Float, pitch: Float, roll: Float, sensitivity: Float): Pair<Int, Int> {

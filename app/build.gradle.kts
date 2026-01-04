@@ -5,11 +5,11 @@ plugins {
 }
 
 android {
-    namespace = "com.example.audiorecord"
+    namespace = "com.kozin.bluetoothlaserpointer"
     compileSdk = 35
 
     defaultConfig {
-        applicationId = "com.example.audiorecord"
+        applicationId = "com.kozin.bluetoothlaserpointer"
         minSdk = 31
         targetSdk = 34
         versionCode = 1

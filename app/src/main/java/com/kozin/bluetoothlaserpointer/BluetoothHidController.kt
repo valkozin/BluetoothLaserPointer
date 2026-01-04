@@ -1,4 +1,4 @@
-package com.example.audiorecord
+package com.kozin.bluetoothlaserpointer
 
 import android.annotation.SuppressLint
 import android.bluetooth.BluetoothAdapter

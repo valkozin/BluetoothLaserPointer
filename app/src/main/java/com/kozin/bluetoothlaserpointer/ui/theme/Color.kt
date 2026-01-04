@@ -1,4 +1,4 @@
-package com.example.audiorecord.ui.theme
+package com.kozin.bluetoothlaserpointer.ui.theme
 
 import androidx.compose.ui.graphics.Color
 

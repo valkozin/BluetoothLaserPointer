@@ -1,4 +1,4 @@
-package com.example.audiorecord
+package com.kozin.bluetoothlaserpointer
 
 object MouseReport {
     // Standard HID Mouse Report Descriptor
