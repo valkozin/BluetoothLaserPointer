@@ -85,8 +85,15 @@ class BluetoothHidController(private val context: Context) {
     private var originalName: String? = null
 
     fun init() {
-        bluetoothAdapter?.getProfileProxy(context, serviceListener, BluetoothProfile.HID_DEVICE)
-        originalName = bluetoothAdapter?.name
+        try {
+            bluetoothAdapter?.getProfileProxy(context, serviceListener, BluetoothProfile.HID_DEVICE)
+            // On API 31+, this requires BLUETOOTH_CONNECT. If called too early, it crashes.
+            originalName = bluetoothAdapter?.name
+        } catch (e: SecurityException) {
+            Log.e(TAG, "SecurityException in init: ${e.message}. Will try again later.")
+        } catch (e: Exception) {
+            Log.e(TAG, "Error in init: ${e.message}")
+        }
     }
 
     fun setName(newName: String) {
