@@ -40,6 +40,10 @@ class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        
+        // Prevent screen from dimming/sleeping to maintain connection
+        window.addFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+        
         enableEdgeToEdge()
         
         tcpController = TcpMouseController()
@@ -81,6 +85,7 @@ fun MainScreen(
     var isTcpConnected by remember { mutableStateOf(false) }
     var isBtConnected by remember { mutableStateOf(false) }
     var isMouseEnabled by remember { mutableStateOf(false) }
+    var isFreezeActive by remember { mutableStateOf(false) }
     var sensitivity by remember { mutableStateOf(10f) }
     
     val isConnected = when (connectionMode) {
@@ -120,8 +125,8 @@ fun MainScreen(
         }
     }
 
-    DisposableEffect(isMouseEnabled, connectionMode) {
-        if (!isMouseEnabled) return@DisposableEffect onDispose {}
+    DisposableEffect(isMouseEnabled, connectionMode, isFreezeActive) {
+        if (!isMouseEnabled || isFreezeActive) return@DisposableEffect onDispose {}
 
         val sensorManager = context.getSystemService(Context.SENSOR_SERVICE) as SensorManager
         val rotationSensor = sensorManager.getDefaultSensor(Sensor.TYPE_ROTATION_VECTOR)
@@ -142,7 +147,7 @@ fun MainScreen(
                     
                     angles = OrientationAngles(azimuth, pitch, roll)
                     
-                    if (isMouseEnabled) {
+                    if (isMouseEnabled && !isFreezeActive) {
                         val (dx, dy) = converter.convert(azimuth, pitch, roll, sensitivity)
                         if (dx != 0 || dy != 0) {
                             when (connectionMode) {
@@ -189,7 +194,7 @@ fun MainScreen(
             fontSize = 18.sp
         )
 
-        Spacer(modifier = Modifier.height(24.dp))
+        Spacer(modifier = Modifier.height(16.dp))
 
         // Connection Card
         Card(
@@ -197,68 +202,77 @@ fun MainScreen(
             shape = RoundedCornerShape(16.dp),
             colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))
         ) {
-            Column(modifier = Modifier.padding(16.dp)) {
+            Column(modifier = Modifier.padding(12.dp)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text("Connection Mode", fontWeight = FontWeight.Bold, fontSize = 16.sp)
+                    Text("Mode", fontWeight = FontWeight.Bold, fontSize = 14.sp)
                     Spacer(Modifier.weight(1f))
                     ConnectionToggle(currentMode = connectionMode, onModeChange = { connectionMode = it })
                 }
                 
-                Spacer(modifier = Modifier.height(16.dp))
-
                 if (connectionMode == ConnectionMode.USB) {
-                    Column {
-                        Text(
-                            "Note: Requires 'mouse_server.py' running on PC.",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.secondary
-                        )
-                        Spacer(modifier = Modifier.height(8.dp))
-                        Button(
-                            onClick = { if (isTcpConnected) tcpController.disconnect() else tcpController.connect() },
-                            modifier = Modifier.fillMaxWidth()
-                        ) {
-                            Text(if (isTcpConnected) "Disconnect USB" else "Connect USB")
-                        }
+                    Text(
+                        "Requires 'mouse_server.py' on PC.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.secondary,
+                        modifier = Modifier.padding(top = 4.dp)
+                    )
+                    Button(
+                        onClick = { if (isTcpConnected) tcpController.disconnect() else tcpController.connect() },
+                        modifier = Modifier.fillMaxWidth().padding(top = 4.dp),
+                        contentPadding = PaddingValues(0.dp)
+                    ) {
+                        Text(if (isTcpConnected) "Disconnect USB" else "Connect USB")
                     }
                 } else {
-                    Column {
-                        Button(
-                            onClick = { checkAndRegisterBluetooth(context, permissionLauncher, btController) },
-                            modifier = Modifier.fillMaxWidth()
-                        ) {
-                            Text(if (isBtConnected) "Refresh Pairing" else "Start HID Discovery")
-                        }
-                        if (!isBtConnected) {
-                            Text(
-                                "Pair with Windows as 'Remote Mouse Pro'",
-                                style = MaterialTheme.typography.bodySmall,
-                                modifier = Modifier.padding(top = 8.dp),
-                                color = MaterialTheme.colorScheme.secondary
-                            )
-                        }
+                    Button(
+                        onClick = { checkAndRegisterBluetooth(context, permissionLauncher, btController) },
+                        modifier = Modifier.fillMaxWidth().padding(top = 8.dp)
+                    ) {
+                        Text(if (isBtConnected) "Refresh Bluetooth" else "Start Discovery")
                     }
                 }
             }
         }
 
-        Spacer(modifier = Modifier.height(24.dp))
+        Spacer(modifier = Modifier.height(16.dp))
 
-        // Controls Card
+        // Presentation & Movement Card
         Card(
             modifier = Modifier.fillMaxWidth(),
             shape = RoundedCornerShape(16.dp)
         ) {
             Column(modifier = Modifier.padding(16.dp)) {
+                // Next/Prev Slides
+                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                    Button(
+                        onClick = { if (isBtConnected) btController.sendKeyboardKey(MouseReport.KEY_PAGE_UP) },
+                        modifier = Modifier.weight(1f),
+                        colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.tertiary),
+                        enabled = isBtConnected
+                    ) {
+                        Text("PREV SLIDE")
+                    }
+                    Button(
+                        onClick = { if (isBtConnected) btController.sendKeyboardKey(MouseReport.KEY_PAGE_DOWN) },
+                        modifier = Modifier.weight(1f),
+                        colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.tertiary),
+                        enabled = isBtConnected
+                    ) {
+                        Text("NEXT SLIDE")
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(12.dp))
+
+                // Mouse Clicks
                 Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                     Button(
                         onClick = { 
                             if (connectionMode == ConnectionMode.USB) tcpController.sendClick(true)
                             else btController.sendMouseCallback(0, 0, leftBtn = true)
                         },
-                        modifier = Modifier.weight(1f).height(120.dp),
-                        shape = RoundedCornerShape(12.dp),
-                        colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
+                        modifier = Modifier.weight(1f).height(100.dp),
+                        shape = RoundedCornerShape(12.dp)
                     ) {
                         Text("LEFT", fontSize = 20.sp, fontWeight = FontWeight.Bold)
                     }
@@ -267,7 +281,7 @@ fun MainScreen(
                             if (connectionMode == ConnectionMode.USB) tcpController.sendClick(false)
                             else btController.sendMouseCallback(0, 0, rightBtn = true)
                         },
-                        modifier = Modifier.weight(1f).height(120.dp),
+                        modifier = Modifier.weight(1f).height(100.dp),
                         shape = RoundedCornerShape(12.dp),
                         colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.secondary)
                     ) {
@@ -275,22 +289,33 @@ fun MainScreen(
                     }
                 }
 
-                Spacer(modifier = Modifier.height(16.dp))
+                Spacer(modifier = Modifier.height(12.dp))
 
-                Button(
-                    onClick = { 
-                        if (connectionMode == ConnectionMode.USB) tcpController.sendCenterCommand()
-                        else converter.recenter()
-                    },
-                    modifier = Modifier.fillMaxWidth(),
-                    enabled = isConnected
-                ) {
-                    Text("Center Pointer")
+                // Freeze & Center
+                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                    Button(
+                        onClick = { isFreezeActive = !isFreezeActive },
+                        modifier = Modifier.weight(1f),
+                        colors = if (isFreezeActive) ButtonDefaults.buttonColors(containerColor = Color.Red) else ButtonDefaults.buttonColors()
+                    ) {
+                        Text(if (isFreezeActive) "UNFREEZE" else "FREEZE CURSOR")
+                    }
+                    Button(
+                        onClick = { 
+                            converter.recenter()
+                            if (connectionMode == ConnectionMode.USB) tcpController.sendCenterCommand()
+                            Toast.makeText(context, "Centered", Toast.LENGTH_SHORT).show()
+                        },
+                        modifier = Modifier.weight(1f),
+                        enabled = isConnected
+                    ) {
+                        Text("CENTER")
+                    }
                 }
             }
         }
 
-        Spacer(modifier = Modifier.height(24.dp))
+        Spacer(modifier = Modifier.height(16.dp))
 
         // Settings Card
         Card(
@@ -298,14 +323,14 @@ fun MainScreen(
             shape = RoundedCornerShape(16.dp),
             colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f))
         ) {
-            Column(modifier = Modifier.padding(16.dp)) {
+            Column(modifier = Modifier.padding(12.dp)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text("Enable Movement", fontWeight = FontWeight.Medium)
                     Spacer(Modifier.weight(1f))
                     Switch(checked = isMouseEnabled, onCheckedChange = { isMouseEnabled = it })
                 }
                 
-                Spacer(modifier = Modifier.height(16.dp))
+                Spacer(modifier = Modifier.height(8.dp))
                 
                 Text(text = "Sensitivity: ${String.format("%.1f", sensitivity)}", style = MaterialTheme.typography.labelLarge)
                 Slider(
@@ -316,8 +341,6 @@ fun MainScreen(
             }
         }
 
-        Spacer(modifier = Modifier.weight(1f))
-        
         // Debug Info
         Text(
             text = "Azimuth: ${String.format("%.1f", angles.azimuth)}° | Pitch: ${String.format("%.1f", angles.pitch)}°",

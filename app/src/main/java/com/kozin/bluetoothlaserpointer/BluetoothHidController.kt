@@ -129,9 +129,9 @@ class BluetoothHidController(private val context: Context) {
         val sdp = BluetoothHidDeviceAppSdpSettings(
             "Remote Mouse Pro",
             "Android Bluetooth HID Mouse",
-            "Android App",
-            0x80.toByte(), // Mouse subclass
-            MouseReport.MOUSE_REPORT_DESCRIPTOR
+            "Android HID Device",
+            0x00.toByte(), // Generic subclass since it's composite
+            MouseReport.COMPOSITE_REPORT_DESCRIPTOR
         )
         
         val qos = BluetoothHidDeviceAppQosSettings(
@@ -181,16 +181,37 @@ class BluetoothHidController(private val context: Context) {
         if (leftBtn) buttons = buttons or 0x01
         if (rightBtn) buttons = buttons or 0x02
 
-        // Report format: [Buttons (1 byte), X (1 byte), Y (1 byte)]
-        // Total 3 bytes to match descriptor
+        // Mouse Report: [Buttons, X, Y]
         val report = ByteArray(3)
         report[0] = buttons.toByte()
         report[1] = dx.coerceIn(-127, 127).toByte()
         report[2] = dy.coerceIn(-127, 127).toByte()
         
-        val sent = hidDevice.sendReport(device, 0, report)
+        // Use Report ID 1
+        val sent = hidDevice.sendReport(device, 1, report)
         if (!sent) {
-            Log.e(TAG, "Failed to send HID report")
+            Log.e(TAG, "Failed to send HID mouse report")
+        }
+    }
+
+    fun sendKeyboardKey(keyCode: Byte) {
+        val device = hostDevice ?: return
+        val hidDevice = bluetoothHidDevice ?: return
+
+        // Keyboard Report: [Modifiers, Reserved, Key1, Key2, Key3, Key4, Key5, Key6]
+        val pressReport = ByteArray(8)
+        pressReport[2] = keyCode
+
+        val releaseReport = ByteArray(8)
+
+        // Send Press (ID 2)
+        hidDevice.sendReport(device, 2, pressReport)
+        
+        // Short delay for the host to register the key press
+        // In a real app, you might want to handle this better, but for single keys it usually works
+        userExecutor.execute {
+            try { Thread.sleep(20) } catch (e: Exception) {}
+            hidDevice.sendReport(device, 2, releaseReport)
         }
     }
     
